@@ -117,3 +117,49 @@ jobs:
         with:
           name: results
           path: build/out
+
+  # An unsigned build for real iPhones and iPads, built alongside the tests on a second machine. Without an
+  # Apple Developer account it is installed with Sideloadly on Windows, which signs it with the student's own
+  # Apple ID (valid 7 days); with an account it would go to TestFlight instead.
+  iphone-ipa:
+    runs-on: macos-15-intel
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate the Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build for iPhone and iPad
+        timeout-minutes: 70
+        run: |
+          mkdir -p build
+          set +e
+          xcodebuild build \
+            -project OlympicInstitute.xcodeproj \
+            -scheme OlympicInstitute \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath build/device \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" 2>&1 | tee build/device.log |
+            grep --line-buffered -E "error:|to type-check|\*\* "
+          exit "${PIPESTATUS[0]}"
+
+      - name: Pack the IPA
+        run: |
+          APP=build/device/Build/Products/Release-iphoneos/OlympicInstitute.app
+          mkdir -p build/ipa/Payload
+          cp -R "$APP" build/ipa/Payload/
+          (cd build/ipa && zip -qry ../OlympicInstitute.ipa Payload)
+          ls -la build/OlympicInstitute.ipa
+
+      - name: Publish to the iphone-app release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete iphone-app --yes --cleanup-tag || true
+          gh release create iphone-app build/OlympicInstitute.ipa --prerelease --target "$GITHUB_SHA" \
+            --title "iPhone app (unsigned) ${GITHUB_SHA::7}" \
+            --notes "Unsigned build for real iPhones and iPads. Install it with Sideloadly using your Apple ID."
