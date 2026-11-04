@@ -291,6 +291,7 @@ private struct QuestionCard: View {
             HStack(spacing: 10) {
                 Image(systemName: multiple ? (selected ? "checkmark.square.fill" : "square") : (selected ? "largecircle.fill.circle" : "circle"))
                     .font(.system(size: 20)).foregroundStyle(selected ? p.cyanText : p.muted)
+                    .accessibilityHidden(true)
                 Text(title).font(AppFont.body(16)).foregroundStyle(p.text)
                 Spacer()
             }

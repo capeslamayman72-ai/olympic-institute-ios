@@ -10,7 +10,11 @@ struct HTMLText: View {
 
     var body: some View {
         Group {
-            if let text { Text(text).lineSpacing(5) } else { Color.clear.frame(height: 20) }
+            if let text {
+                Text(text).font(AppFont.body(16)).foregroundStyle(p.textSoft).tint(p.cyanText).lineSpacing(5)
+            } else {
+                Color.clear.frame(height: 20)
+            }
         }
         .task(id: html + (p.isDark ? "d" : "l")) { text = render() }
     }
@@ -84,16 +88,16 @@ struct VideoBox: View {
             if let u = video.url.flatMap(URL.init(string:)) { VideoPlayer(player: AVPlayer(url: u)) }
         case "youtube":
             if let id = VideoLinks.youtubeId(video.url) {
-                EmbedView(html: Self.frame("https://www.youtube.com/embed/\(id)?playsinline=1&rel=0&modestbranding=1"), base: model.http.siteURL)
+                EmbedView(html: Self.iframe("https://www.youtube.com/embed/\(id)?playsinline=1&rel=0&modestbranding=1"), base: model.http.siteURL)
             }
         case "vimeo":
-            if let src = VideoLinks.vimeoEmbed(video.url) { EmbedView(html: Self.frame(src), base: model.http.siteURL) }
+            if let src = VideoLinks.vimeoEmbed(video.url) { EmbedView(html: Self.iframe(src), base: model.http.siteURL) }
         default:
             if let html = video.html { EmbedView(html: Self.page(html), base: model.http.siteURL) }
         }
     }
 
-    static func frame(_ src: String) -> String {
+    static func iframe(_ src: String) -> String {
         page(#"<iframe src="\#(src)" allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowfullscreen></iframe>"#)
     }
 
@@ -226,7 +230,8 @@ struct WebPageView: View {
 
     private func prepare() async {
         do {
-            let target = signedIn && model.session.token != nil ? try await model.api.webSession(url) : url
+            var target = url
+            if signedIn && model.session.token != nil { target = try await model.api.webSession(url) }
             start = URL(string: target)
         } catch {
             failure = error

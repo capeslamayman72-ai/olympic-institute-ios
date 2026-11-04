@@ -169,7 +169,8 @@ struct AssistantView: View {
                 .font(AppFont.body(14.5))
                 .lineSpacing(4)
                 .foregroundStyle(m.fromUser ? .white : p.text)
-                .multilineTextAlignment(rtl ? .trailing : .leading)
+                // The direction follows the text, so "leading" is the right edge for Arabic and the left for English.
+                .multilineTextAlignment(.leading)
                 .environment(\.layoutDirection, rtl ? .rightToLeft : .leftToRight)
                 .environment(\.openURL, OpenURLAction { url in
                     router.site(url.absoluteString, label: url.absoluteString)
@@ -220,7 +221,7 @@ struct AssistantView: View {
             guard let url = match.url, let r = Range(match.range, in: text), let ar = Range(r, in: out) else { continue }
             out[ar].link = url
             out[ar].foregroundColor = p.cyanText
-            out[ar].underlineStyle = .single
+            out[ar].underlineStyle = Text.LineStyle.single
         }
         return out
     }

@@ -37,11 +37,15 @@ jobs:
           echo "iphone=$IPHONE" >> "$GITHUB_OUTPUT"
           echo "ipad=$IPAD" >> "$GITHUB_OUTPUT"
           jq -r --arg a "$IPHONE" --arg b "$IPAD" '.devices[][] | select(.udid == $a or .udid == $b) | .name' sims.json
+          # Booted up front, so the test runner is never installed on a half-started simulator.
+          for d in "$IPHONE" "$IPAD"; do xcrun simctl boot "$d" || true; xcrun simctl bootstatus "$d" -b; done
 
       - name: Build and test
+        timeout-minutes: 40
         run: |
           mkdir -p build
-          # The log is kept whole for the release; the step fails only when the tests did.
+          # The whole log goes to a file for the release; errors and test progress also show here as they happen.
+          set +e
           xcodebuild test \
             -project OlympicInstitute.xcodeproj \
             -scheme OlympicInstitute \
@@ -49,9 +53,12 @@ jobs:
             -destination "id=${{ steps.sims.outputs.ipad }}" \
             -resultBundlePath build/Results.xcresult \
             -parallel-testing-enabled NO \
-            CODE_SIGNING_ALLOWED=NO > build/xcodebuild.log 2>&1 && touch build/tests-passed || true
-          grep -E "error:|Test Case .*(passed|failed)|Executed|\*\* " build/xcodebuild.log | tail -150 || true
-          test -f build/tests-passed
+            -maximum-concurrent-test-simulator-destinations 1 \
+            -test-timeouts-enabled YES \
+            -maximum-test-execution-time-allowance 600 \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee build/xcodebuild.log |
+            grep --line-buffered -E "error:|Test Case .*(started|passed|failed)|Test Suite .*started|Executed|Testing started|\*\* "
+          exit "${PIPESTATUS[0]}"
 
       - name: Collect results
         if: always()

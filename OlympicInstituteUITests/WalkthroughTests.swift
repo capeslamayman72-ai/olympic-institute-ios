@@ -1,3 +1,4 @@
+import UIKit
 import XCTest
 
 /// Walks the app against `StubServer` and keeps a screenshot of each screen (exported by the CI build).

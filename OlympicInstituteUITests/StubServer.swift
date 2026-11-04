@@ -36,7 +36,8 @@ final class StubServer {
             guard let self else { return }
             var buf = buffer
             if let data { buf.append(data) }
-            if let (method, path) = Self.parse(buf) {
+            if let request = Self.parse(buf) {
+                let (method, path) = request
                 self.lock.lock()
                 self.log.append("\(method) \(path)")
                 self.lock.unlock()

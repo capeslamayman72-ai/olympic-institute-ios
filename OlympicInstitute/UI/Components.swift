@@ -124,17 +124,18 @@ struct RemoteImage: View {
     @Environment(\.palette) private var p
 
     var body: some View {
-        ZStack {
-            p.glass
-            if let url, let u = URL(string: url) {
-                AsyncImage(url: u, transaction: Transaction(animation: .easeOut(duration: 0.2))) { phase in
-                    if let image = phase.image {
-                        image.resizable().aspectRatio(contentMode: mode)
+        // The plain fill sets the size; the photo is drawn over it, so a filling photo can never widen the layout.
+        p.glass
+            .overlay {
+                if let url, let u = URL(string: url) {
+                    AsyncImage(url: u, transaction: Transaction(animation: .easeOut(duration: 0.2))) { phase in
+                        if let image = phase.image {
+                            image.resizable().aspectRatio(contentMode: mode)
+                        }
                     }
                 }
             }
-        }
-        .clipped()
+            .clipped()
     }
 }
 
@@ -171,6 +172,8 @@ struct NavBar: ViewModifier {
         content
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
+            // Back is just the arrow, so no system "Back" in English shows on an Arabic screen.
+            .toolbarRole(.editor)
             .toolbarBackground(p.page, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .background(p.page.ignoresSafeArea())

@@ -148,7 +148,8 @@ enum Parse {
             let url = a.abs("href")
             guard seen.insert(url).inserted else { return nil }
             let parents = (try? a.parents().array()) ?? []
-            let box = parents.first { $0.first("h1, h2, h3, h4") != nil && $0.first("img") != nil } ?? a.parent() ?? a
+            let up = parents.first
+            let box = parents.first { $0.first("h1, h2, h3, h4") != nil && $0.first("img") != nil } ?? up ?? a
             let title = box.first("h2, h3, h4")?.plain ?? ""
             let meta = (box.first(".book__meta")?.plain ?? "").replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             let cover = box.first("img")?.abs("src") ?? ""

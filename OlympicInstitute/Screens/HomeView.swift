@@ -181,23 +181,26 @@ private struct HeroBlock: View {
     private let timer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        ZStack {
+        VStack(spacing: 28) {
+            HStack(alignment: .center, spacing: 32) {
+                content
+                if wide { Emblem(url: emblem).frame(width: 280) }
+            }
+            if !wide { Emblem(url: emblem) }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 32)
+        .centered()
+        // The slideshow sits behind the content and takes its size from it.
+        .background {
             if !images.isEmpty {
-                RemoteImage(url: images[shot % images.count])
-                    .opacity(p.isDark ? 0.35 : 0.22)
-                    .animation(.easeInOut(duration: 1.2), value: shot)
-                p.heroVeil
-            }
-            VStack(spacing: 28) {
-                HStack(alignment: .center, spacing: 32) {
-                    content
-                    if wide { Emblem(url: emblem).frame(width: 280) }
+                ZStack {
+                    RemoteImage(url: images[shot % images.count])
+                        .opacity(p.isDark ? 0.35 : 0.22)
+                        .animation(.easeInOut(duration: 1.2), value: shot)
+                    p.heroVeil
                 }
-                if !wide { Emblem(url: emblem) }
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 32)
-            .centered()
         }
         .clipped()
         .onReceive(timer) { _ in if images.count > 1 { shot += 1 } }

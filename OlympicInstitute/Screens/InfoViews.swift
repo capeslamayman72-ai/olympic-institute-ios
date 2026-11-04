@@ -73,6 +73,7 @@ struct VerifyView: View {
 
     private func check() {
         guard valid, !busy else { return }
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         busy = true
         error = nil
         result = nil
