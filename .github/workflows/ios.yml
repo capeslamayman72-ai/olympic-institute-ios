@@ -31,6 +31,8 @@ jobs:
         run: |
           xcrun simctl list devices available --json > sims.json
           IPHONE=$(jq -r '[.devices | to_entries[] | select(.key | test("iOS")) | .value[] | select(.name | test("^iPhone 1[5-7]( Pro)?$"))] | last | .udid' sims.json)
+          # Fall back to any iPhone if the usual models are missing on this image.
+          [ "$IPHONE" = "null" ] && IPHONE=$(jq -r '[.devices | to_entries[] | select(.key | test("iOS")) | .value[] | select(.name | test("^iPhone"))] | last | .udid' sims.json)
           IPAD=$(jq -r '[.devices | to_entries[] | select(.key | test("iOS")) | .value[] | select(.name | test("^iPad (Air|Pro)"))] | last | .udid' sims.json)
           echo "iphone=$IPHONE" >> "$GITHUB_OUTPUT"
           echo "ipad=$IPAD" >> "$GITHUB_OUTPUT"
@@ -39,7 +41,7 @@ jobs:
       - name: Build and test
         run: |
           mkdir -p build
-          set -o pipefail
+          # The log is kept whole for the release; the step fails only when the tests did.
           xcodebuild test \
             -project OlympicInstitute.xcodeproj \
             -scheme OlympicInstitute \
@@ -47,8 +49,9 @@ jobs:
             -destination "id=${{ steps.sims.outputs.ipad }}" \
             -resultBundlePath build/Results.xcresult \
             -parallel-testing-enabled NO \
-            CODE_SIGNING_ALLOWED=NO 2>&1 | tee build/xcodebuild.log | grep -E "error:|warning: .*deprecated|Test Case|Executed|\*\* " || true
-          test "${PIPESTATUS[0]}" -eq 0
+            CODE_SIGNING_ALLOWED=NO > build/xcodebuild.log 2>&1 && touch build/tests-passed || true
+          grep -E "error:|Test Case .*(passed|failed)|Executed|\*\* " build/xcodebuild.log | tail -150 || true
+          test -f build/tests-passed
 
       - name: Collect results
         if: always()
