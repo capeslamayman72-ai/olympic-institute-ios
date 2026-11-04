@@ -15,8 +15,9 @@ concurrency:
 
 jobs:
   build-and-test:
-    # Intel Macs: GitHub's arm64 Macs keep dropping jobs for lack of capacity.
-    runs-on: macos-15-intel
+    # Apple-silicon Macs: Intel simulators took 20+ minutes just to start testing. The iPhone IPA job
+    # below stays on Intel, so a busy arm64 queue never holds up the installable build.
+    runs-on: macos-15
     timeout-minutes: 110
     steps:
       - uses: actions/checkout@v4
@@ -107,8 +108,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete ci-latest --yes --cleanup-tag || true
-          FILES="build/out/errors.txt build/out/log-tail.txt build/screenshots.zip"
-          for f in build/out/summary.json build/out/tests.json build/OlympicInstitute-simulator.zip; do [ -f "$f" ] && FILES="$FILES $f"; done
+          FILES=""
+          for f in build/out/errors.txt build/out/log-tail.txt build/screenshots.zip; do if [ -s "$f" ]; then FILES="$FILES $f"; fi; done
+          for f in build/out/summary.json build/out/tests.json build/OlympicInstitute-simulator.zip; do if [ -s "$f" ]; then FILES="$FILES $f"; fi; done
           gh release create ci-latest $FILES --prerelease --target "$GITHUB_SHA" \
             --title "CI build ${{ github.run_number }}" --notes "Automatic build of ${GITHUB_SHA::7}: screenshots, test summary and errors."
 
