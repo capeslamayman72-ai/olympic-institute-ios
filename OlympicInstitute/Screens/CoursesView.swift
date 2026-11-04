@@ -48,8 +48,7 @@ struct CoursesView: View {
                         }
                     }
 
-                    (Text(L.t("عرض ", "Showing ")) + Text("\(shown.count)").foregroundColor(p.cyanText).bold()
-                        + Text(L.t(" من إجمالي ", " of ")) + Text("\(list.count)").bold() + Text(L.t(" دورة", " courses")))
+                    countLine(shown: shown.count, total: list.count)
                         .font(AppFont.body(15)).foregroundStyle(p.muted)
 
                     if shown.isEmpty {
@@ -72,6 +71,19 @@ struct CoursesView: View {
         }
         .navBar(L.t("الدورات والدبلومات", "Courses & diplomas"))
         .task { categories = (try? await model.api.categories()) ?? [] }
+    }
+
+    /// "عرض 9 من إجمالي 15 دورة" with the shown count in cyan, as on the site. Built step by step so the
+    /// compiler does not have to search every `+` overload at once.
+    private func countLine(shown: Int, total: Int) -> Text {
+        let count: Text = Text(verbatim: String(shown)).foregroundColor(p.cyanText).bold()
+        let all: Text = Text(verbatim: String(total)).bold()
+        var line: Text = Text(verbatim: L.t("عرض ", "Showing "))
+        line = line + count
+        line = line + Text(verbatim: L.t(" من إجمالي ", " of "))
+        line = line + all
+        line = line + Text(verbatim: L.t(" دورة", " courses"))
+        return line
     }
 }
 

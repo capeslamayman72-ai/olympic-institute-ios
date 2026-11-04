@@ -348,7 +348,7 @@ struct Stars: View {
         if let r = rating, r.count > 0 {
             HStack(spacing: 2) {
                 ForEach(0..<5, id: \.self) { i in
-                    Image(systemName: r.average >= Double(i) + 0.75 ? "star.fill" : r.average >= Double(i) + 0.25 ? "star.leadinghalf.filled" : "star")
+                    Image(systemName: Self.symbol(r.average, i))
                         .font(.system(size: 11))
                         .foregroundStyle(p.turqText)
                 }
@@ -358,6 +358,14 @@ struct Stars: View {
         } else {
             Text(L.t("لا توجد تقييمات بعد", "No ratings yet")).font(AppFont.body(13)).foregroundStyle(p.muted)
         }
+    }
+
+    /// Full, half or empty star for position `index` (0-based).
+    static func symbol(_ average: Double, _ index: Int) -> String {
+        let left: Double = average - Double(index)
+        if left >= 0.75 { return "star.fill" }
+        if left >= 0.25 { return "star.leadinghalf.filled" }
+        return "star"
     }
 }
 

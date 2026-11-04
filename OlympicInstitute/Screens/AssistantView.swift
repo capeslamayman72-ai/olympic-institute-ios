@@ -168,7 +168,7 @@ struct AssistantView: View {
             Text(linkified(m.text, m.fromUser))
                 .font(AppFont.body(14.5))
                 .lineSpacing(4)
-                .foregroundStyle(m.fromUser ? .white : p.text)
+                .foregroundStyle(m.fromUser ? Color.white : p.text)
                 // The direction follows the text, so "leading" is the right edge for Arabic and the left for English.
                 .multilineTextAlignment(.leading)
                 .environment(\.layoutDirection, rtl ? .rightToLeft : .leftToRight)
@@ -228,17 +228,29 @@ struct AssistantView: View {
 
     /// .oi-chat__btn and its primary / WhatsApp variants.
     private func chatButton(_ label: String, kind: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        let text: Color
+        let fill: AnyShapeStyle
+        switch kind {
+        case "whatsapp":
+            text = p.isDark ? Brand.darkPage : Color.white
+            fill = AnyShapeStyle(Brand.whatsapp)
+        case "primary":
+            text = Color.white
+            fill = AnyShapeStyle(brand)
+        default:
+            text = p.text
+            fill = AnyShapeStyle(p.elevated)
+        }
+        let border: Color = kind.isEmpty ? p.line : Color.clear
+        return Button(action: action) {
             HStack(spacing: 6) {
                 if kind == "whatsapp" { Image("WhatsApp").renderingMode(.template).resizable().frame(width: 15, height: 15) }
                 Text(label).font(AppFont.head(13))
             }
-            .foregroundStyle(kind == "whatsapp" ? (p.isDark ? Brand.darkPage : .white) : kind == "primary" ? .white : p.text)
+            .foregroundStyle(text)
             .padding(.horizontal, 14).frame(minHeight: 34)
-            .background(
-                Capsule().fill(kind == "whatsapp" ? AnyShapeStyle(Brand.whatsapp) : kind == "primary" ? AnyShapeStyle(brand) : AnyShapeStyle(p.elevated))
-            )
-            .overlay(Capsule().stroke(kind.isEmpty ? p.line : .clear, lineWidth: 1))
+            .background(Capsule().fill(fill))
+            .overlay(Capsule().stroke(border, lineWidth: 1))
         }
         .buttonStyle(.plain)
     }

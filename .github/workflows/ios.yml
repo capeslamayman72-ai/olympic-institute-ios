@@ -17,7 +17,7 @@ jobs:
   build-and-test:
     # Intel Macs: GitHub's arm64 Macs keep dropping jobs for lack of capacity.
     runs-on: macos-15-intel
-    timeout-minutes: 75
+    timeout-minutes: 110
     steps:
       - uses: actions/checkout@v4
 
@@ -41,15 +41,29 @@ jobs:
           # Booted up front, so the test runner is never installed on a half-started simulator.
           for d in "$IPHONE" "$IPAD"; do xcrun simctl boot "$d" || true; xcrun simctl bootstatus "$d" -b; done
 
-      - name: Build and test
-        timeout-minutes: 40
+      # Whole logs go to files for the release; errors, slow-to-compile code and test progress also show live.
+      - name: Build
+        timeout-minutes: 50
         run: |
           mkdir -p build
-          # The whole log goes to a file for the release; errors and test progress also show here as they happen.
           set +e
-          xcodebuild test \
+          xcodebuild build-for-testing \
             -project OlympicInstitute.xcodeproj \
             -scheme OlympicInstitute \
+            -destination "id=${{ steps.sims.outputs.iphone }}" \
+            -derivedDataPath build/dd \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee build/build.log |
+            grep --line-buffered -E "error:|to type-check|Resolve Package Graph|Compiling|\*\* "
+          exit "${PIPESTATUS[0]}"
+
+      - name: Test on iPhone and iPad
+        timeout-minutes: 35
+        run: |
+          set +e
+          xcodebuild test-without-building \
+            -project OlympicInstitute.xcodeproj \
+            -scheme OlympicInstitute \
+            -derivedDataPath build/dd \
             -destination "id=${{ steps.sims.outputs.iphone }}" \
             -destination "id=${{ steps.sims.outputs.ipad }}" \
             -resultBundlePath build/Results.xcresult \
@@ -65,8 +79,9 @@ jobs:
         if: always()
         run: |
           mkdir -p build/out/screenshots
-          grep -E "error:|fatal error|\*\* (BUILD|TEST) FAILED|Failing tests|XCTAssert" build/xcodebuild.log | head -300 > build/out/errors.txt || true
-          tail -120 build/xcodebuild.log > build/out/log-tail.txt || true
+          cat build/build.log build/xcodebuild.log 2>/dev/null > build/all.log
+          grep -E "error:|fatal error|to type-check|\*\* (BUILD|TEST) FAILED|Failing tests|XCTAssert" build/all.log | head -300 > build/out/errors.txt || true
+          tail -120 build/all.log > build/out/log-tail.txt || true
           if [ -d build/Results.xcresult ]; then
             xcrun xcresulttool get test-results summary --path build/Results.xcresult > build/out/summary.json || true
             xcrun xcresulttool get test-results tests --path build/Results.xcresult > build/out/tests.json || true
@@ -79,12 +94,11 @@ jobs:
           (cd build/out && zip -qr ../screenshots.zip screenshots)
           ls -la build/out build/out/screenshots | head -80
 
-      - name: Build the simulator app
+      - name: Pack the simulator app
         if: always()
         run: |
-          xcodebuild build -project OlympicInstitute.xcodeproj -scheme OlympicInstitute -configuration Release \
-            -sdk iphonesimulator -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO > build/out/app-build.log 2>&1 || true
-          APP=$(find build/dd -name "OlympicInstitute.app" -type d | head -1)
+          # The app already built for the tests; no second (Release) compile.
+          APP=$(find build/dd/Build/Products -name "OlympicInstitute.app" -type d -path "*iphonesimulator*" | head -1)
           if [ -n "$APP" ]; then (cd "$(dirname "$APP")" && zip -qry "$GITHUB_WORKSPACE/build/OlympicInstitute-simulator.zip" OlympicInstitute.app); fi
 
       - name: Publish to the ci-latest release

@@ -69,12 +69,7 @@ struct QuizView: View {
                         starting = false
                     }
                 } label: {
-                    if starting { ProgressView().tint(p.buttonText) } else {
-                        Text(!quiz.drawnInApp ? L.t("افتح الاختبار", "Open the quiz")
-                             : quiz.openAttemptId != nil ? L.t("كمّل المحاولة", "Resume attempt")
-                             : !quiz.canStart ? L.t("خلصت المحاولات المسموحة", "No attempts left")
-                             : L.t("ابدأ الاختبار", "Start the quiz"))
-                    }
+                    if starting { ProgressView().tint(p.buttonText) } else { Text(Self.startLabel(quiz)) }
                 }
                 .buttonStyle(PrimaryStyle(full: true))
                 .disabled(!quiz.canStart || starting)
@@ -103,6 +98,13 @@ struct QuizView: View {
             Spacer()
             Text(value).font(AppFont.head(15)).foregroundStyle(p.text)
         }
+    }
+
+    static func startLabel(_ quiz: QuizInfo) -> String {
+        if !quiz.drawnInApp { return L.t("افتح الاختبار", "Open the quiz") }
+        if quiz.openAttemptId != nil { return L.t("كمّل المحاولة", "Resume attempt") }
+        if !quiz.canStart { return L.t("خلصت المحاولات المسموحة", "No attempts left") }
+        return L.t("ابدأ الاختبار", "Start the quiz")
     }
 
     static func fmt(_ v: Double) -> String {
@@ -316,6 +318,7 @@ private struct ResultView: View {
         let r = result.result
         let color: Color = r.passed == true ? p.turqText : r.passed == false ? p.sale : p.cyanText
         let left = quiz.attemptsLeft.map { $0 - 1 }
+        let headline: String = Self.headline(r)
         ScrollView {
             VStack(spacing: 14) {
                 ZStack {
@@ -324,9 +327,7 @@ private struct ResultView: View {
                     Text("\(QuizView.fmt(r.percent))%").font(AppFont.head(30)).foregroundStyle(color)
                 }
                 .frame(width: 140, height: 140)
-                Text(r.passed == true ? L.t("مبروك! نجحت في الاختبار", "Well done! You passed")
-                     : r.passed == false ? L.t("لم تصل لدرجة النجاح (\(Int(r.passingGrade))%)", "Below the pass mark (\(Int(r.passingGrade))%)")
-                     : L.t("إجاباتك المكتوبة هتتراجع من المحاضر وهتظهر النتيجة بعدها", "Your written answers will be reviewed by the instructor"))
+                Text(headline)
                     .font(AppFont.head(17)).foregroundStyle(p.text).multilineTextAlignment(.center)
                 Text(L.t("الدرجة: \(QuizView.fmt(r.earnedMarks)) من \(QuizView.fmt(r.totalMarks))", "Score: \(QuizView.fmt(r.earnedMarks)) of \(QuizView.fmt(r.totalMarks))"))
                     .font(AppFont.body(15)).foregroundStyle(p.muted)
@@ -359,6 +360,16 @@ private struct ResultView: View {
                 }
             }
             .padding(16)
+        }
+    }
+
+    static func headline(_ r: QuizResultBody) -> String {
+        switch r.passed {
+        case true?: return L.t("مبروك! نجحت في الاختبار", "Well done! You passed")
+        case false?:
+            let mark = Int(r.passingGrade)
+            return L.t("لم تصل لدرجة النجاح (\(mark)%)", "Below the pass mark (\(mark)%)")
+        case nil: return L.t("إجاباتك المكتوبة هتتراجع من المحاضر وهتظهر النتيجة بعدها", "Your written answers will be reviewed by the instructor")
         }
     }
 }
