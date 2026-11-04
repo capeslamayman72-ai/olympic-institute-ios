@@ -42,21 +42,31 @@ final class WalkthroughTests: XCTestCase {
         return e
     }
 
-    /// Scrolls until the element can be tapped (lists only build what is on screen).
-    private func reveal(_ e: XCUIElement) {
+    /// Scrolls until the element can be tapped (lists only build what is on screen), then clear of the sticky
+    /// bottom bar, and waits for the scrolling to stop: a tap while the page still glides only stops it.
+    private func reveal(_ e: XCUIElement, clearBottom: Bool = true) {
         var tries = 0
         while (!e.exists || !e.isHittable) && tries < 12 {
             app.swipeUp()
+            Thread.sleep(forTimeInterval: 1.0)
+            tries += 1
+        }
+        tries = 0
+        while clearBottom && e.exists && e.frame.maxY > app.frame.maxY - 220 && tries < 4 {
+            let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))
+            from.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)))
+            Thread.sleep(forTimeInterval: 1.0)
             tries += 1
         }
     }
 
-    private func tapButton(_ text: String, exact: Bool = false) {
+    /// `clearBottom: false` for buttons that live in a bottom bar or a sheet, which a drag would move or dismiss.
+    private func tapButton(_ text: String, exact: Bool = false, clearBottom: Bool = true) {
         let query = exact ? app.buttons.matching(NSPredicate(format: "label == %@", text)) : app.buttons.matching(NSPredicate(format: "label CONTAINS %@", text))
         let b = query.firstMatch
-        if !b.waitForExistence(timeout: 5) { reveal(b) }
+        if !b.waitForExistence(timeout: 5) { reveal(b, clearBottom: clearBottom) }
         XCTAssertTrue(b.waitForExistence(timeout: 20), "no button: \(text)")
-        reveal(b)
+        reveal(b, clearBottom: clearBottom)
         b.tap()
     }
 
@@ -130,8 +140,8 @@ final class WalkthroughTests: XCTestCase {
         tapButton("صح", exact: true)
         waitFor("أجبت 2 من 4")
         shot("15-quiz-taking")
-        tapButton("سلّم الإجابات")
-        tapButton("سلّم", exact: true)
+        tapButton("سلّم الإجابات", clearBottom: false)
+        tapButton("سلّم", exact: true, clearBottom: false)
         waitFor("مبروك! نجحت في الاختبار")
         shot("16-quiz-result")
         XCTAssertTrue(server.requests.contains { $0.hasPrefix("POST /wp-json/oi-app/v1/quiz-attempts/") })
