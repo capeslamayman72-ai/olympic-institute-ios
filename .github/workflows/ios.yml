@@ -1,0 +1,94 @@
+# Builds and tests the app on GitHub's macOS machines (no Mac needed locally), on an iPhone and an iPad
+# simulator, then publishes screenshots, the test summary and any build errors to the "ci-latest" release.
+name: iOS
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate the Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+          xcodebuild -version
+
+      - name: Pick an iPhone and an iPad simulator
+        id: sims
+        run: |
+          xcrun simctl list devices available --json > sims.json
+          IPHONE=$(jq -r '[.devices | to_entries[] | select(.key | test("iOS")) | .value[] | select(.name | test("^iPhone 1[5-7]( Pro)?$"))] | last | .udid' sims.json)
+          IPAD=$(jq -r '[.devices | to_entries[] | select(.key | test("iOS")) | .value[] | select(.name | test("^iPad (Air|Pro)"))] | last | .udid' sims.json)
+          echo "iphone=$IPHONE" >> "$GITHUB_OUTPUT"
+          echo "ipad=$IPAD" >> "$GITHUB_OUTPUT"
+          jq -r --arg a "$IPHONE" --arg b "$IPAD" '.devices[][] | select(.udid == $a or .udid == $b) | .name' sims.json
+
+      - name: Build and test
+        run: |
+          mkdir -p build
+          set -o pipefail
+          xcodebuild test \
+            -project OlympicInstitute.xcodeproj \
+            -scheme OlympicInstitute \
+            -destination "id=${{ steps.sims.outputs.iphone }}" \
+            -destination "id=${{ steps.sims.outputs.ipad }}" \
+            -resultBundlePath build/Results.xcresult \
+            -parallel-testing-enabled NO \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee build/xcodebuild.log | grep -E "error:|warning: .*deprecated|Test Case|Executed|\*\* " || true
+          test "${PIPESTATUS[0]}" -eq 0
+
+      - name: Collect results
+        if: always()
+        run: |
+          mkdir -p build/out/screenshots
+          grep -E "error:|fatal error|\*\* (BUILD|TEST) FAILED|Failing tests|XCTAssert" build/xcodebuild.log | head -300 > build/out/errors.txt || true
+          tail -120 build/xcodebuild.log > build/out/log-tail.txt || true
+          if [ -d build/Results.xcresult ]; then
+            xcrun xcresulttool get test-results summary --path build/Results.xcresult > build/out/summary.json || true
+            xcrun xcresulttool get test-results tests --path build/Results.xcresult > build/out/tests.json || true
+            xcrun xcresulttool export attachments --path build/Results.xcresult --output-path build/attachments || true
+            if [ -f build/attachments/manifest.json ]; then
+              jq -r '.[] | .attachments[] | "\(.exportedFileName)\t\(.suggestedHumanReadableName)"' build/attachments/manifest.json |
+                while IFS=$'\t' read -r file name; do cp "build/attachments/$file" "build/out/screenshots/${name}"; done
+            fi
+          fi
+          (cd build/out && zip -qr ../screenshots.zip screenshots)
+          ls -la build/out build/out/screenshots | head -80
+
+      - name: Build the simulator app
+        if: always()
+        run: |
+          xcodebuild build -project OlympicInstitute.xcodeproj -scheme OlympicInstitute -configuration Release \
+            -sdk iphonesimulator -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO > build/out/app-build.log 2>&1 || true
+          APP=$(find build/dd -name "OlympicInstitute.app" -type d | head -1)
+          if [ -n "$APP" ]; then (cd "$(dirname "$APP")" && zip -qry "$GITHUB_WORKSPACE/build/OlympicInstitute-simulator.zip" OlympicInstitute.app); fi
+
+      - name: Publish to the ci-latest release
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete ci-latest --yes --cleanup-tag || true
+          FILES="build/out/errors.txt build/out/log-tail.txt build/screenshots.zip"
+          for f in build/out/summary.json build/out/tests.json build/OlympicInstitute-simulator.zip; do [ -f "$f" ] && FILES="$FILES $f"; done
+          gh release create ci-latest $FILES --prerelease --target "$GITHUB_SHA" \
+            --title "CI build ${{ github.run_number }}" --notes "Automatic build of ${GITHUB_SHA::7}: screenshots, test summary and errors."
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results
+          path: build/out
