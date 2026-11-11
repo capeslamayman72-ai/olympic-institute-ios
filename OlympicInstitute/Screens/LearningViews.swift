@@ -68,6 +68,26 @@ struct LessonView: View {
                         }
                         .aspectRatio(16 / 9, contentMode: .fit)
                         .clipShape(RoundedRectangle(cornerRadius: p.radiusMd))
+                        if VideoLinks.playable(video) {
+                            // A way out whatever the player does on this phone: YouTube's own app, or the lesson on the website.
+                            let youtube = video.kind == "youtube" ? VideoLinks.youtubeId(video.url) : nil
+                            Button {
+                                if let youtube, let u = URL(string: "https://www.youtube.com/watch?v=\(youtube)") {
+                                    UIApplication.shared.open(u)
+                                } else {
+                                    router.push(.web(url: lesson.link, title: lesson.title, signedIn: true))
+                                }
+                            } label: {
+                                Label(
+                                    youtube != nil
+                                        ? L.t("الفيديو مش شغّال؟ افتحه في يوتيوب", "Video not playing? Open it in YouTube")
+                                        : L.t("الفيديو مش شغّال؟ شاهده من الموقع", "Video not playing? Watch it on the website"),
+                                    systemImage: "arrow.up.right.square"
+                                )
+                                .font(AppFont.body(14))
+                                .foregroundStyle(p.cyanText)
+                            }
+                        }
                     }
                     Text(lesson.title).font(AppFont.head(23)).foregroundStyle(p.text)
 

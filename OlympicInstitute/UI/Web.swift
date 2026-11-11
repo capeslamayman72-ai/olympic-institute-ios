@@ -131,6 +131,61 @@ struct EmbedView: UIViewRepresentable {
     func updateUIView(_ web: WKWebView, context: Context) {}
 }
 
+/* ---------- sign-up check ---------- */
+
+/// The website's own "I'm not a robot" box, for signing up in the app. The site's sign-up guards accept a registration
+/// only with a reCAPTCHA answer, which the site checks with Google; reCAPTCHA draws its box only on the domain its key
+/// belongs to, so the page is loaded with the site as its base URL, and the answer comes back through a script message.
+struct CaptchaView: UIViewRepresentable {
+    let siteKey: String
+    let base: String
+    let onToken: (String) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(onToken: onToken) }
+
+    func makeUIView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.userContentController.add(context.coordinator, name: "oiCaptcha")
+        let web = WKWebView(frame: .zero, configuration: config)
+        web.backgroundColor = .white
+        web.loadHTMLString(Self.page(siteKey), baseURL: URL(string: base + "/"))
+        return web
+    }
+
+    func updateUIView(_ web: WKWebView, context: Context) {}
+
+    static func dismantleUIView(_ web: WKWebView, coordinator: Coordinator) {
+        web.configuration.userContentController.removeScriptMessageHandler(forName: "oiCaptcha")
+    }
+
+    final class Coordinator: NSObject, WKScriptMessageHandler {
+        let onToken: (String) -> Void
+        init(onToken: @escaping (String) -> Void) { self.onToken = onToken }
+
+        func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard let token = message.body as? String, !token.isEmpty else { return }
+            onToken(token)
+        }
+    }
+
+    static func page(_ siteKey: String) -> String {
+        let ar = L.lang == .ar
+        let note = ar ? "علّم على «أنا لست برنامج روبوت» علشان نكمّل إنشاء حسابك." : "Tick “I'm not a robot” to finish creating your account."
+        return """
+        <!doctype html><html lang="\(ar ? "ar" : "en")" dir="\(ar ? "rtl" : "ltr")"><head><meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <style>html,body{margin:0;background:#fff;color:#0b2545;font-family:-apple-system,sans-serif}
+        .wrap{box-sizing:border-box;min-height:100vh;display:flex;flex-direction:column;align-items:center;gap:18px;padding:28px 12px;text-align:center}
+        p{margin:0;font-size:16px;line-height:1.7}</style>
+        <script>function oiDone(t){window.webkit.messageHandlers.oiCaptcha.postMessage(t)}function oiExpired(){}</script>
+        <script src="https://www.google.com/recaptcha/api.js?hl=\(ar ? "ar" : "en")" async defer></script>
+        </head><body><div class="wrap"><p>\(note)</p>
+        <div class="g-recaptcha" data-sitekey="\(siteKey)" data-callback="oiDone" data-expired-callback="oiExpired"></div>
+        </div></body></html>
+        """
+    }
+}
+
 /* ---------- in-app browser ---------- */
 
 /// Hosts that belong in their own apps rather than inside the in-app browser.

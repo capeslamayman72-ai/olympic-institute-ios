@@ -119,6 +119,10 @@ struct RegisterView: View {
     @State private var error: String?
     @State private var fields: [String: String] = [:]
     @State private var verify: String?
+    /// When the screen opened: the site's guard turns away a sign-up sent within seconds, as scripts do.
+    @State private var opened = Date()
+    /// Set while the site's "I'm not a robot" box is on screen.
+    @State private var captchaKey: String?
 
     var body: some View {
         ScrollView {
@@ -164,6 +168,21 @@ struct RegisterView: View {
         .alert(L.t("فعّل حسابك", "Activate your account"), isPresented: Binding(get: { verify != nil }, set: { if !$0 { verify = nil } })) {
             Button(L.t("تمام", "OK")) { router.back() }
         } message: { Text(verify ?? "") }
+        .sheet(isPresented: Binding(get: { captchaKey != nil }, set: { if !$0 { captchaKey = nil } })) {
+            NavigationStack {
+                CaptchaView(siteKey: captchaKey ?? "", base: model.http.siteURL) { token in
+                    captchaKey = nil
+                    send(captcha: token)
+                }
+                .navigationTitle(L.t("خطوة أخيرة", "One last step"))
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button(L.t("إلغاء", "Cancel")) { captchaKey = nil }
+                    }
+                }
+            }
+        }
     }
 
     private func submit() {
@@ -180,9 +199,32 @@ struct RegisterView: View {
         guard local.isEmpty else { return }
         busy = true
         error = nil
+        // Ask the site whether it wants the reCAPTCHA box, then show it; without one, sign up straight away.
         Task {
             do {
-                switch try await model.api.register(first: first, last: last, username: username, email: email, password: password, acceptTerms: terms) {
+                if let key = try await model.api.signupCaptchaKey() {
+                    busy = false
+                    captchaKey = key
+                } else {
+                    send(captcha: nil)
+                }
+            } catch {
+                self.error = ApiError.describe(error)
+                busy = false
+            }
+        }
+    }
+
+    private func send(captcha: String?) {
+        busy = true
+        error = nil
+        let seconds = min(3600, Int(Date().timeIntervalSince(opened)))
+        Task {
+            do {
+                switch try await model.api.register(
+                    first: first, last: last, username: username, email: email, password: password, acceptTerms: terms,
+                    captcha: captcha, formSeconds: seconds
+                ) {
                 case .signedIn:
                     // Back past the sign-in screen too, to whatever asked for an account.
                     router.afterSignIn()

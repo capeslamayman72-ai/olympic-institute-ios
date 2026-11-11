@@ -30,11 +30,25 @@ struct AppAPI {
         return user
     }
 
-    func register(first: String, last: String, username: String, email: String, password: String, acceptTerms: Bool) async throws -> SignUpOutcome {
-        let data = try await http.postJSON(base + "/auth/register", [
+    /// The reCAPTCHA key the website's sign-up form uses, or nil when the site asks for none.
+    func signupCaptchaKey() async throws -> String? {
+        struct Reply: Decodable { let signupCaptchaKey: String? }
+        let key = try http.decode(Reply.self, try await http.get(base + "/config", auth: false)).signupCaptchaKey ?? ""
+        return key.trimmingCharacters(in: .whitespaces).isEmpty ? nil : key
+    }
+
+    /// `captcha` is the answer from the site's "I'm not a robot" box, `formSeconds` how long the sign-up screen was open:
+    /// the site's sign-up guards check both, as on the website's own form.
+    func register(
+        first: String, last: String, username: String, email: String, password: String, acceptTerms: Bool,
+        captcha: String? = nil, formSeconds: Int = 0
+    ) async throws -> SignUpOutcome {
+        var body: [String: Any] = [
             "first_name": first, "last_name": last, "username": username, "email": email,
-            "password": password, "accept_terms": acceptTerms, "device": device,
-        ], auth: false)
+            "password": password, "accept_terms": acceptTerms, "device": device, "form_seconds": formSeconds,
+        ]
+        if let captcha { body["captcha"] = captcha }
+        let data = try await http.postJSON(base + "/auth/register", body, auth: false)
         let reply = try http.decode(SignInReply.self, data)
         if reply.verificationRequired == true { return .verifyEmail(reply.message ?? "") }
         guard let token = reply.token, let user = reply.user else { throw ApiError(code: "bad_reply", message: "", status: 0) }
